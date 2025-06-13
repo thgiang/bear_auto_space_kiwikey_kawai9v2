@@ -2,6 +2,7 @@
 #include "oled_driver.h"
 #include <avr/io.h>
 #include <avr/interrupt.h>
+#include "anim_bongocat_rle.h"
 
 enum custom_keycodes {
     KC_BPM_TOGGLE = SAFE_RANGE,
@@ -22,13 +23,27 @@ static uint32_t qmk_space_press_timestamp = 0;
 static uint32_t last_oled_update = 0;
 static bool rgb_enabled = true;
 
-#define SPACE_HOLD_TIME_MS 100
+static uint16_t SPACE_HOLD_TIME_MS = 60; // Giá trị mặc định
+
+// Hàm lấy số ngẫu nhiên trong khoảng [min, max]
+static uint16_t get_random_value(uint16_t min, uint16_t max) {
+    return min + (rand() % (max - min + 1));
+}
+
+// Hàm cập nhật SPACE_HOLD_TIME_MS
+static void update_space_hold_time(void) {
+    // Lấy thời gian hiện tại để làm seed cho rand()
+    srand(timer_read32());
+    
+    // Tính toán giá trị mới theo công thức: 60 - bpm/20 + rand(10, 30)
+    // Giả sử bpm là 120 (có thể thay đổi tùy theo nhu cầu)
+    uint16_t bpm = 120;
+    SPACE_HOLD_TIME_MS = 60 - (bpm / 20) + get_random_value(10, 30);
+}
+
 
 static uint32_t get_interval_us(void) {
     uint32_t interval = (uint32_t)(60000000.0f / bpm * 4.0f);
-    if (interval < 50000) {
-        interval = 50000;
-    }
     return interval;
 }
 
@@ -93,31 +108,29 @@ static void render_bpm(void) {
     }
     last_oled_update = current_time;
 
-    oled_clear();
-    oled_write_P(PSTR("BPM: "), false);
+    // Chỉ xóa phần hiển thị BPM
+    oled_set_cursor(0, 0);
+    oled_write_P(PSTR("BPM "), false);
     char bpm_str[8];
     snprintf(bpm_str, sizeof(bpm_str), "%d.%d", (int)bpm, (int)((bpm - (int)bpm) * 10));
     oled_write(bpm_str, false);
-    oled_write_P(PSTR("\n"), false);
-
-    oled_write_P(PSTR("Space: "), false);
     if (is_loop_running) {
-        oled_write_P(PSTR("ON\n"), false);
+         oled_write_P(PSTR(" ON\n"), false);
     } else {
-        oled_write_P(PSTR("OFF\n"), false);
+         oled_write_P(PSTR(" OFF\n"), false);
     }
-
-    oled_write_P(PSTR("Count: "), false);
-    char count_str[10];
-    sprintf(count_str, "%lu", space_count);
-    oled_write(count_str, false);
-
-
-    oled_write_P(PSTR("\n<3 BEARPATCH.NET <3"), false);
 }
 
 bool oled_task_user(void) {
+    static bool first_run = true;
+    
+    if (first_run) {
+        oled_clear();
+        first_run = false;
+    }
+    
     render_bpm();
+    render_bongocat();
     return false;
 }
 
@@ -156,6 +169,7 @@ void matrix_scan_user(void) {
     if (space_is_held && (timer_read32() - qmk_space_press_timestamp >= SPACE_HOLD_TIME_MS)) {
         unregister_code(KC_SPACE);
         space_is_held = false;
+        update_space_hold_time();
     }
 }
 
