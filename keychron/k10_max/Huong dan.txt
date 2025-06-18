@@ -1,0 +1,3 @@
+git clone https://github.com/keychron/qmk_firmware
+
+Sau đó thay file k10_max này vào thư mục keyboards/keychron
