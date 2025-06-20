@@ -52,33 +52,39 @@ bool turning_on_auto = false;
 int bpmGoc = 125;
 int bpmHienTai = 125;
 float thoi_gian_moi_nhip = 1920.0f;
-float thoi_diem_per = 0;
-int count = 0;
+float thoi_diem_per = 0.0f;
+float thoi_diem_per_tiep_theo = 0.0f;
+int count = 1;
 bool tryingToPer = false;
 bool shift_held = false;
-int arrow_left_count = 0;
+int arrow_left_count = 0.0f;
 int arrow_up_count = 0;
 bool space_tap_pending = false;
 uint16_t space_timer = 0;
 bool shift_tap_pending = false;
 uint16_t shift_timer = 0;
 int random_delay = 60;
-#define DOUBLE_SPACE_DELAY 200
-#define DOUBLE_SHIFT_DELAY 200
+bool co_chinh_nhac = false;
+#define DOUBLE_SHIFT_DELAY 400
+// #define DEBUG
 
 void matrix_scan_user(void) {
  if (turning_on_auto) {
-        if (timer_read32() - thoi_diem_per >= thoi_gian_moi_nhip) {
+        if (timer_read32() - thoi_diem_per_tiep_theo >= thoi_gian_moi_nhip) {
             if (tryingToPer) 
             {
                 register_code(KC_SPC);
-                // Random from 50 to 90
-                random_delay = rand() % 40 + 50;
+                random_delay = rand() % 30 + 60;
                 wait_ms(random_delay);        
                 unregister_code(KC_SPC);
+                #ifdef DEBUG
+                    send_string("Per");
+                #endif
             } 
             tryingToPer = false;
-            thoi_diem_per += thoi_gian_moi_nhip;
+            count += 1;
+            thoi_diem_per_tiep_theo = thoi_diem_per + (count * 60000.0f * 4.0f / bpmHienTai);
+            
         }
     } 
 }
@@ -99,11 +105,13 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
                 if (shift_tap_pending && timer_elapsed(shift_timer) < DOUBLE_SHIFT_DELAY) {
                     shift_tap_pending = false;
                     turning_on_auto = !turning_on_auto;
-                    if (turning_on_auto) {
-                        //send_string("Bat");
-                    } else {
-                        //send_string("Tat"); 
-                    }     
+                    #ifdef DEBUG
+                        if (turning_on_auto) {
+                            send_string("Bat");
+                        } else {
+                            send_string("Tat"); 
+                        } 
+                    #endif 
                 } else {
                     shift_tap_pending = true;
                     shift_timer = timer_read();
@@ -115,64 +123,72 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
                     shift_tap_pending = false;
                 }
                 // Nếu có nhấn mũi tên trong khi giữ shift
-                if (arrow_left_count != 0 || arrow_up_count != 0) {
+                if (co_chinh_nhac) {
                     // Lưu trạng thái Shift hiện tại và vô hiệu hóa nó tạm thời bởi vì nếu vẫn giữ shift mà in chữ send_string ra thì nó biến thành kí tự đặc biệt trên màn hình
                     uint8_t original_mods = get_mods();
                     del_mods(MOD_MASK_SHIFT); // Xóa trạng thái shift
 
                     bpmHienTai = bpmGoc + arrow_left_count * 10 + arrow_up_count;
                     thoi_gian_moi_nhip = 60000.0f / bpmHienTai * 4.0f; // Chắc chắn là phép tính float
-
-                    //char buffer[32];
-                    //snprintf(buffer, sizeof(buffer), "%d", bpmHienTai);
-                    //send_string(buffer);
-                    // send_string(" ---  ");
-                    // int phan_nguyen = (int)thoi_gian_moi_nhip;
-                    // int phan_thap_phan = (int)((thoi_gian_moi_nhip - phan_nguyen) * 1000); // Lấy 3 chữ số thập phân
-                    // snprintf(buffer, sizeof(buffer), "%d.%03d", phan_nguyen, phan_thap_phan);
-                    // send_string(buffer);
-
+                    #ifdef DEBUG
+                        // Gửi thông tin debug
+                        char buffer[32];
+                        snprintf(buffer, sizeof(buffer), "%d", bpmHienTai);
+                        send_string(buffer);
+                        // send_string(" ---  ");
+                        // int phan_nguyen = (int)thoi_gian_moi_nhip;
+                        // int phan_thap_phan = (int)((thoi_gian_moi_nhip - phan_nguyen) * 1000); // Lấy 3 chữ số thập phân
+                        // snprintf(buffer, sizeof(buffer), "%d.%03d", phan_nguyen, phan_thap_phan);
+                        // send_string(buffer);
+                    #endif
                     // Khôi phục trạng thái Shift ban đầu
                     set_mods(original_mods);
 
                     arrow_left_count = 0;
                     arrow_up_count = 0;
+                    co_chinh_nhac = false; // Đặt lại cờ chỉnh nhịp
                 }
             }
             return true; // Xử lý Shift ở đây
 
         case KC_LEFT:
             if (record->event.pressed && shift_held) {
+                co_chinh_nhac = true; // Đặt cờ để biết có chỉnh nhịp
                 arrow_left_count--;
             }
             return true; // Luôn cho phép arrow key hoạt động bình thường
         case KC_RIGHT:
             if (record->event.pressed && shift_held) {
+                co_chinh_nhac = true; // Đặt cờ để biết có chỉnh nhịp
                 arrow_left_count++;
             }
             return true; // Luôn cho phép arrow key hoạt động bình thường
 
         case KC_UP:
             if (record->event.pressed && shift_held) {
+                co_chinh_nhac = true; // Đặt cờ để biết có chỉnh nhịp
                 arrow_up_count++;
             }
             return true; // Luôn cho phép arrow key hoạt động bình thường
         case KC_DOWN:
             if (record->event.pressed && shift_held) {
+                co_chinh_nhac = true; // Đặt cờ để biết có chỉnh nhịp
                 arrow_up_count--;
             }
             return true; // Luôn cho phép arrow key hoạt động bình thường
 
-        case KC_SPC: // Space chỉ cập nhật thoi_diem_per
+        case KC_SPC: // Space chỉ cập nhật thoi_diem_per 
             if (record->event.pressed) {
                 if (turning_on_auto) {
-                    // Nếu space sớm 120ms thì delay lại chờ đúng thời điểm mới nhả ở hàm matrix_scan_user
-                    if (timer_read32() - thoi_diem_per > thoi_gian_moi_nhip - 200) {
+                    // Nếu space sớm 200ms thì delay lại chờ đúng thời điểm mới nhả ở hàm matrix_scan_user
+                    if (timer_read32() - thoi_diem_per_tiep_theo > thoi_gian_moi_nhip - 200) {
                         tryingToPer = true;
                         return false;
                     }
                 } else {
                     thoi_diem_per = timer_read32();
+                    count = 1; // Đặt lại count về 1 khi bắt đầu một chu kỳ mới
+                    thoi_diem_per_tiep_theo = thoi_diem_per + (count * 60000.0f * 4.0f / bpmHienTai);
                     return true;
                 }
             }
